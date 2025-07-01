@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Meta untuk PWA -->
+    <meta name="theme-color" content="#1f2937"/>
+    <meta name="description" content="Cari film favoritmu, bisa diakses saat offline.">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="images/icon-192x192.png">
+
+    <title>NonAChill</title>
+
+    <!-- Memuat Tailwind CSS dari CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Menggunakan font Inter sebagai default */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Animasi Kelap-kelip Warna RGB untuk Judul */
+        .rgb-text-animation {
+            animation: rgb-animation 3s linear infinite;
+        }
+
+        @keyframes rgb-animation {
+            0%   { color: #ff8c8c; }
+            15%  { color: #ffcf8c; }
+            30%  { color: #ffff8c; }
+            45%  { color: #8cff8c; }
+            60%  { color: #8cffff; }
+            75%  { color: #8c8cff; }
+            90%  { color: #cf8cff; }
+            100% { color: #ff8c8c; }
+        }
+
+        /* Menyembunyikan scrollbar untuk modal content di browser Webkit */
+        #modal-body::-webkit-scrollbar {
+            display: none;
+        }
+        #modal-body {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans antialiased transition-colors duration-300">
+
+    <!-- Indikator Status Koneksi -->
+    <div id="status-indicator" class="fixed top-0 left-0 w-full p-2 text-white text-center font-bold z-[1002] transition-transform duration-300 transform -translate-y-full"></div>
+
+    <div class="container mx-auto p-4 md:p-6 max-w-6xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold rgb-text-animation">Nonton And Chill</h1>
+            <p class="mt-2 text-gray-500 dark:text-gray-400">Jelajahi dunia sinema, online maupun offline.</p>
+        </header>
+
+        <!-- Form Pencarian -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-6 sticky top-4 z-50">
+            <form id="search-form" class="flex flex-col sm:flex-row gap-3">
+                <input type="text" id="search-input" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 dark:bg-gray-700" placeholder="Cari judul film... (misal: Inception)">
+                <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200 font-semibold">
+                    Cari
+                </button>
+            </form>
+        </div>
+
+        <!-- Tombol untuk Kembali ke Rekomendasi (Awalnya Tersembunyi) -->
+        <div id="back-to-home-container" class="hidden mb-4">
+            <button id="back-to-home-button" class="flex items-center gap-2 text-indigo-500 dark:text-indigo-400 hover:underline font-semibold">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Kembali ke Rekomendasi
+            </button>
+        </div>
+        
+        <!-- Judul Bagian -->
+        <div class="mb-6">
+            <h2 id="section-title" class="text-2xl font-bold border-b-2 border-indigo-500 pb-2"></h2>
+        </div>
+
+        <!-- Kontainer untuk menampilkan hasil film -->
+        <main id="movie-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></main>
+        
+        <!-- Pesan saat tidak ada hasil atau state awal -->
+        <div id="placeholder" class="text-center py-10 text-gray-500">
+            <p>Memuat rekomendasi untuk Anda...</p>
+        </div>
+
+        <!-- Tombol untuk menginstall PWA -->
+        <button id="install-button" class="hidden fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-green-600 transition-colors flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Install Aplikasi
+        </button>
+    </div>
+
+    <!-- Modal untuk Detail Film -->
+    <div id="movie-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-[1001] flex justify-center items-center p-4 transition-opacity duration-300">
+        <div id="modal-content" class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col relative transform transition-transform duration-300 scale-95">
+            <!-- Tombol Tutup Modal -->
+            <button id="modal-close-button" class="absolute top-3 right-3 p-2 rounded-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors z-20">
+                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-800 dark:text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            
+            <!-- Konten Modal -->
+            <div id="modal-body" class="p-6 md:p-8 overflow-y-auto flex-grow">
+                <!-- Konten detail akan diisi oleh JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Menautkan file JavaScript aplikasi -->
+    <script src="app.js"></script>
+</body>
+</html>

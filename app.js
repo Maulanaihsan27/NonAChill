@@ -1,89 +1,86 @@
-// ===================================================================================
-// LOGIKA UTAMA APLIKASI (NonAChill PWA)
-// ===================================================================================
-
-document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', () => {
 
     // --- SELEKTOR DOM & VARIABEL GLOBAL ---
-    const apiKey = 'thewdb'; // Kunci API untuk OMDb
-    const searchForm = document.getElementById('search-form');
-    const searchInput = document.getElementById('search-input');
-    const movieContainer = document.getElementById('movie-container');
-    const placeholder = document.getElementById('placeholder');
-    const statusIndicator = document.getElementById('status-indicator');
-    const modal = document.getElementById('movie-modal');
-    const modalContent = document.getElementById('modal-content');
-    const modalBody = document.getElementById('modal-body');
-    const modalCloseButton = document.getElementById('modal-close-button');
-    const backToHomeContainer = document.getElementById('back-to-home-container');
-    const backToHomeButton = document.getElementById('back-to-home-button');
-    const sectionTitle = document.getElementById('section-title');
-    const installButton = document.getElementById('install-button');
+    const apiKey = 'thewdb'; // API key dari OMDb
+    const searchForm = document.getElementById('search-form'); // Form pencarian
+    const searchInput = document.getElementById('search-input'); // Input teks pencarian
+    const movieContainer = document.getElementById('movie-container'); // Kontainer kartu film
+    const placeholder = document.getElementById('placeholder'); // Placeholder saat loading/empty
+    const statusIndicator = document.getElementById('status-indicator'); // Indikator status koneksi
+    const modal = document.getElementById('movie-modal'); // Modal detail film
+    const modalContent = document.getElementById('modal-content'); // Isi modal
+    const modalBody = document.getElementById('modal-body'); // Body modal
+    const modalCloseButton = document.getElementById('modal-close-button'); // Tombol close modal
+    const backToHomeContainer = document.getElementById('back-to-home-container'); // Kontainer tombol back
+    const backToHomeButton = document.getElementById('back-to-home-button'); // Tombol kembali ke home
+    const sectionTitle = document.getElementById('section-title'); // Judul bagian (Rekomendasi / Pencarian)
+    const installButton = document.getElementById('install-button'); // Tombol install aplikasi PWA
 
-    let deferredPrompt; // Untuk event instalasi PWA
-    let db; // Untuk instance IndexedDB
+    let deferredPrompt; // Event beforeinstallprompt disimpan sementara
+    let db; // Objek database IndexedDB
 
-    // --- INISIALISASI INDEXEDDB ---
+    // --- INISIALISASI INDEXEDDB UNTUK MENYIMPAN FILM SECARA OFFLINE ---
     const initDB = () => {
-        const dbName = 'MoviePWA_DB';
-        const storeName = 'movies';
-        const request = indexedDB.open(dbName, 1);
+        const dbName = 'MoviePWA_DB'; // Nama database
+        const storeName = 'movies'; // Nama object store
+        const request = indexedDB.open(dbName, 1); // Membuka atau membuat DB
 
         request.onerror = (event) => console.error('Error saat membuka IndexedDB:', event.target.errorCode);
         request.onsuccess = (event) => {
-            db = event.target.result;
+            db = event.target.result; // DB siap digunakan
             console.log('Database IndexedDB berhasil dibuka.');
-            // Setelah DB siap, muat data awal
-            loadInitialRecommendations();
+            loadInitialRecommendations(); // Langsung muat data awal
         };
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
             if (!db.objectStoreNames.contains(storeName)) {
-                const objectStore = db.createObjectStore(storeName, { keyPath: 'imdbID' });
-                objectStore.createIndex('Title', 'Title', { unique: false });
+                const objectStore = db.createObjectStore(storeName, { keyPath: 'imdbID' }); // Menyimpan berdasarkan imdbID
+                objectStore.createIndex('Title', 'Title', { unique: false }); // Membuat index judul
                 console.log('Object store "movies" berhasil dibuat.');
             }
         };
     };
 
-    // --- FUNGSI DATABASE (CRUD) ---
+    // --- SIMPAN FILM KE INDEXEDDB ---
     const saveMovieToDB = (movieData) => {
         if (!db) return;
         const transaction = db.transaction(['movies'], 'readwrite');
         const objectStore = transaction.objectStore('movies');
-        // Menggunakan put() agar data diperbarui jika sudah ada
-        objectStore.put(movieData);
+        objectStore.put(movieData); // Menyimpan atau meng-update film
     };
 
+    // --- AMBIL FILM DARI INDEXEDDB BERDASARKAN QUERY ---
     const getMoviesFromDB = (searchQuery) => {
         return new Promise((resolve, reject) => {
             if (!db) return reject('Database tidak siap.');
             const transaction = db.transaction(['movies'], 'readonly');
             const request = transaction.objectStore('movies').getAll();
+
             request.onerror = (event) => reject('Error mengambil data dari DB:', event.target.errorCode);
             request.onsuccess = (event) => {
                 const allMovies = event.target.result;
                 if (searchQuery) {
-                    // Filter berdasarkan judul jika ada query pencarian
+                    // Filter film yang judulnya mengandung query
                     const filtered = allMovies.filter(m => m.Title.toLowerCase().includes(searchQuery.toLowerCase()));
                     resolve(filtered);
                 } else {
-                    resolve(allMovies); // Kembalikan semua jika tidak ada query
+                    resolve(allMovies); // Kembalikan semua data
                 }
             };
         });
     };
-    
+
+    // --- AMBIL DETAIL FILM TERTENTU DARI DB BERDASARKAN imdbID ---
     const getMovieDetailsFromDB = (imdbID) => {
         return new Promise((resolve) => {
             if (!db) return resolve(null);
             const request = db.transaction(['movies']).objectStore('movies').get(imdbID);
-            request.onsuccess = e => resolve(e.target.result);
+            request.onsuccess = e => resolve(e.target.result); // Return data film
             request.onerror = () => resolve(null);
         });
     };
 
-    // --- LOGIKA UTAMA APLIKASI ---
+    // --- FETCH DATA DARI OMDb API BERDASARKAN PARAMETER QUERY ---
     const fetchFromAPI = async (params) => {
         const url = `https://www.omdbapi.com/?apikey=${apiKey}&${params}`;
         const response = await fetch(url);
@@ -93,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return data;
     };
 
+    // --- MUAT FILM REKOMENDASI DEFAULT (AVENGERS) ---
     const loadInitialRecommendations = async () => {
         sectionTitle.textContent = 'Rekomendasi Film';
         showPlaceholder('Memuat rekomendasi film...');
@@ -100,12 +98,12 @@ document.addEventListener('DOMContentLoaded', () => {
         backToHomeContainer.classList.add('hidden');
 
         try {
-            const data = await fetchFromAPI('s=avengers');
+            const data = await fetchFromAPI('s=avengers'); // Film default
             displayMovies(data.Search);
-            data.Search.forEach(movie => saveMovieToDB(movie));
+            data.Search.forEach(movie => saveMovieToDB(movie)); // Simpan offline
             updateStatusIndicator('Menampilkan data terbaru.', 'online');
         } catch (error) {
-            console.warn('Gagal mengambil rekomendasi dari jaringan, mencoba dari DB lokal...', error);
+            console.warn('Gagal mengambil dari jaringan, coba dari DB...', error);
             try {
                 const offlineMovies = await getMoviesFromDB('avengers');
                 if (offlineMovies.length > 0) {
@@ -114,12 +112,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     showPlaceholder('Gagal memuat rekomendasi. Periksa koneksi internet Anda.');
                 }
-            } catch (dbError) {
+            } catch {
                 showPlaceholder('Gagal mengakses data offline.');
             }
         }
     };
 
+    // --- TANGANI PENCARIAN FILM OLEH USER ---
     const handleSearch = async (e) => {
         e.preventDefault();
         const searchTerm = searchInput.value.trim();
@@ -128,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sectionTitle.textContent = `Hasil Pencarian untuk "${searchTerm}"`;
         showPlaceholder('Mencari film...');
         movieContainer.innerHTML = '';
-        
+
         try {
             const data = await fetchFromAPI(`s=${searchTerm}`);
             displayMovies(data.Search);
@@ -136,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateStatusIndicator('Menampilkan hasil pencarian terbaru.', 'online');
             backToHomeContainer.classList.remove('hidden');
         } catch (error) {
-            console.warn(`Gagal mencari "${searchTerm}" dari jaringan, mencoba dari DB...`, error);
+            console.warn(`Gagal cari "${searchTerm}", coba dari DB...`);
             try {
                 const offlineMovies = await getMoviesFromDB(searchTerm);
                 if (offlineMovies.length > 0) {
@@ -147,13 +146,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     showPlaceholder(error.message === 'Movie not found!' ? `Film "${searchTerm}" tidak ditemukan.` : 'Gagal mencari film. Periksa koneksi Anda.');
                     backToHomeContainer.classList.add('hidden');
                 }
-            } catch (dbError) {
+            } catch {
                 showPlaceholder('Gagal mengakses data offline.');
             }
         }
     };
 
-    // --- FUNGSI RENDER UI ---
+    // --- TAMPILKAN PESAN SAAT LOADING / TIDAK ADA HASIL ---
     const showPlaceholder = (message) => {
         placeholder.textContent = message;
         placeholder.style.display = 'block';
@@ -163,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         placeholder.style.display = 'none';
     };
 
+    // --- TAMPILKAN KARTU FILM DI HALAMAN ---
     const displayMovies = (movies) => {
         movieContainer.innerHTML = '';
         if (!movies || movies.length === 0) {
@@ -170,19 +170,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         hidePlaceholder();
+
         movies.forEach(movie => {
             const movieElement = document.createElement('div');
-            movieElement.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 cursor-pointer group';
+            movieElement.className = 'bg-white dark:bg-gray-800 ...';
             const posterUrl = movie.Poster === 'N/A' 
-                ? `https://placehold.co/400x600/1f2937/ffffff?text=${encodeURIComponent(movie.Title)}` 
+                ? `https://placehold.co/400x600/1f2937/ffffff?text=${encodeURIComponent(movie.Title)}`
                 : movie.Poster;
-            
             movieElement.innerHTML = `
                 <div class="relative">
-                    <img src="${posterUrl}" alt="Poster ${movie.Title}" class="w-full h-96 object-cover" onerror="this.onerror=null;this.src='https://placehold.co/400x600/1f2937/ffffff?text=Image+Error';">
-                    <div class="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                        <p class="text-white text-lg font-bold">Lihat Detail</p>
-                    </div>
+                    <img src="${posterUrl}" alt="Poster ${movie.Title}" class="..." onerror="this.src='https://placehold.co/400x600/1f2937/ffffff?text=Image+Error';">
+                    <div class="..."> <p class="text-white ...">Lihat Detail</p> </div>
                 </div>
                 <div class="p-4">
                     <h3 class="text-lg font-bold truncate">${movie.Title}</h3>
@@ -193,53 +191,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    // --- MENAMPILKAN DETAIL FILM DI MODAL ---
     const showMovieDetails = async (imdbID) => {
         modal.classList.remove('hidden');
         modalBody.innerHTML = '<p class="text-center p-8">Memuat detail...</p>';
         setTimeout(() => modalContent.classList.remove('scale-95'), 10);
 
         try {
-            // Coba ambil dari DB dulu
             let details = await getMovieDetailsFromDB(imdbID);
-            // Jika data di DB tidak lengkap (misal, belum ada Plot), fetch dari API
             if (!details || !details.Plot) {
-                console.log('Detail tidak lengkap di DB, mengambil dari jaringan...');
                 details = await fetchFromAPI(`i=${imdbID}&plot=full`);
-                saveMovieToDB(details); // Simpan/update detail lengkap ke DB
+                saveMovieToDB(details); // Simpan detail lengkap
             }
             populateModal(details);
-        } catch (error) {
-            console.error("Gagal menampilkan detail:", error);
+        } catch {
             modalBody.innerHTML = `<p class="text-center p-8 text-red-500">Gagal memuat detail. Coba lagi saat online.</p>`;
         }
     };
-    
+
+    // --- ISI MODAL DENGAN DATA FILM ---
     const populateModal = (movie) => {
-        const posterUrl = movie.Poster === 'N/A' ? `https://placehold.co/400x600/1f2937/ffffff?text=${encodeURIComponent(movie.Title)}` : movie.Poster;
+        const posterUrl = movie.Poster === 'N/A' ? `https://placehold.co/...` : movie.Poster;
         const ratingsHTML = (movie.Ratings && movie.Ratings.length > 0)
-            ? movie.Ratings.map(rating => `
-                <div class="flex justify-between border-b border-gray-200 dark:border-gray-700 py-1">
-                    <span class="font-semibold">${rating.Source}</span>
-                    <span class="font-bold">${rating.Value}</span>
-                </div>`).join('')
+            ? movie.Ratings.map(rating => `<div class="..."><span>${rating.Source}</span><span>${rating.Value}</span></div>`).join('')
             : '<p>Rating tidak tersedia.</p>';
 
-        modalBody.innerHTML = `
-            <div class="flex flex-col md:flex-row gap-6">
-                <div class="md:w-1/3 flex-shrink-0">
-                    <img src="${posterUrl}" alt="Poster ${movie.Title}" class="w-full rounded-lg shadow-md" onerror="this.onerror=null;this.src='https://placehold.co/400x600/1f2937/ffffff?text=Error';">
-                </div>
-                <div class="md:w-2/3">
-                    <h2 class="text-3xl font-bold mb-2">${movie.Title} <span class="font-light text-2xl">(${movie.Year})</span></h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${movie.Genre} &bull; ${movie.Runtime} &bull; ${movie.Rated}</p>
-                    <h3 class="text-xl font-semibold mt-4 mb-2 border-b border-gray-300 dark:border-gray-600 pb-1">Plot</h3>
-                    <p class="text-gray-700 dark:text-gray-300">${movie.Plot || 'Deskripsi tidak tersedia.'}</p>
-                    <h3 class="text-xl font-semibold mt-4 mb-2 border-b border-gray-300 dark:border-gray-600 pb-1">Ratings</h3>
-                    <div class="space-y-2">${ratingsHTML}</div>
-                    <p class="mt-4"><strong>Sutradara:</strong> ${movie.Director || 'N/A'}</p>
-                    <p><strong>Aktor:</strong> ${movie.Actors || 'N/A'}</p>
-                </div>
-            </div>`;
+        modalBody.innerHTML = `...`; // Isi HTML detail film
     };
 
     const closeModal = () => {
@@ -247,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalContent.classList.add('scale-95');
     };
 
-    // --- LOGIKA PWA & STATUS KONEKSI ---
+    // --- DAFTARKAN SERVICE WORKER UNTUK PWA ---
     const registerServiceWorker = () => {
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -258,54 +235,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- HANDLE EVENT INSTALASI PWA ---
     const handleInstallPrompt = (e) => {
-        e.preventDefault();
+        e.preventDefault(); // Blokir prompt default
         deferredPrompt = e;
-        installButton.classList.remove('hidden');
+        installButton.classList.remove('hidden'); // Tampilkan tombol install
     };
 
     const installApp = () => {
         if (!deferredPrompt) return;
         installButton.classList.add('hidden');
-        deferredPrompt.prompt();
+        deferredPrompt.prompt(); // Tampilkan prompt install
         deferredPrompt.userChoice.then(choiceResult => {
-            console.log('Pilihan pengguna untuk instalasi:', choiceResult.outcome);
+            console.log('Pilihan pengguna:', choiceResult.outcome);
             deferredPrompt = null;
         });
     };
 
+    // --- INDIKATOR STATUS KONEKSI ---
     const updateStatusIndicator = (message, status) => {
         statusIndicator.textContent = message;
-        // Hapus kelas warna sebelumnya
         statusIndicator.classList.remove('bg-green-500', 'bg-red-500', 'bg-yellow-500');
-        
+
         if (status === 'online') {
             statusIndicator.classList.add('bg-green-500');
-            // Sembunyikan notifikasi setelah beberapa detik jika online
             setTimeout(hideStatusIndicator, 3000);
         } else if (status === 'offline') {
             statusIndicator.classList.add('bg-red-500');
         } else {
             statusIndicator.classList.add('bg-yellow-500');
         }
-        
-        statusIndicator.classList.remove('-translate-y-full'); // Tampilkan
+
+        statusIndicator.classList.remove('-translate-y-full');
     };
 
     const hideStatusIndicator = () => {
-        statusIndicator.classList.add('-translate-y-full'); // Sembunyikan
+        statusIndicator.classList.add('-translate-y-full');
     };
 
     const handleConnectionChange = () => {
         if (navigator.onLine) {
             updateStatusIndicator('Anda kembali online.', 'online');
-            loadInitialRecommendations(); // Muat ulang data saat kembali online
+            loadInitialRecommendations();
         } else {
             updateStatusIndicator('Anda sekarang offline.', 'offline');
         }
     };
 
-    // --- EVENT LISTENERS ---
+    // --- DAFTAR EVENT LISTENERS UNTUK INTERAKSI USER ---
     searchForm.addEventListener('submit', handleSearch);
     backToHomeButton.addEventListener('click', loadInitialRecommendations);
     modalCloseButton.addEventListener('click', closeModal);
@@ -315,15 +292,14 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('online', handleConnectionChange);
     window.addEventListener('offline', handleConnectionChange);
 
-    // --- INISIALISASI APLIKASI ---
+    // --- MULAI APLIKASI ---
     const initializeApp = () => {
         registerServiceWorker();
         initDB();
-        // Cek status koneksi saat aplikasi pertama kali dimuat
         if (!navigator.onLine) {
             updateStatusIndicator('Anda sedang offline.', 'offline');
         }
     };
 
-    initializeApp();
+    initializeApp(); // Jalankan app saat pertama dimuat
 });

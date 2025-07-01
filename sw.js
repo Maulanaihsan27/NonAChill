@@ -8,14 +8,14 @@ const urlsToCache = [
     '/index.html',
     '/app.js',
     '/manifest.json',
-    'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap', // Cache font
-    '/images/icon-192x192.png', // Ikon dari folder lokal
+    // DIHAPUS: URL Google Fonts tidak bisa di-cache langsung saat instalasi karena merupakan 'opaque response'.
+    // Font akan di-cache secara dinamis oleh event 'fetch'.
+    '/images/icon-192x192.png',
     '/images/icon-512x512.png'
 ];
 
 // --- Event: Install ---
-// Terjadi saat Service Worker pertama kali diinstal.
-// Tujuannya adalah menyimpan App Shell ke dalam cache.
+// Menyimpan App Shell ke dalam cache.
 self.addEventListener('install', event => {
     console.log('Service Worker: Menginstall...');
     event.waitUntil(
@@ -32,8 +32,7 @@ self.addEventListener('install', event => {
 });
 
 // --- Event: Activate ---
-// Terjadi setelah instalasi berhasil dan SW lama sudah tidak mengontrol klien.
-// Tujuannya adalah membersihkan cache lama yang sudah tidak terpakai.
+// Membersihkan cache lama yang sudah tidak terpakai.
 self.addEventListener('activate', event => {
     console.log('Service Worker: Mengaktifkan...');
     event.waitUntil(
@@ -54,48 +53,49 @@ self.addEventListener('activate', event => {
 });
 
 // --- Event: Fetch ---
-// Terjadi setiap kali aplikasi membuat permintaan jaringan (request).
-// Di sinilah kita mengimplementasikan strategi caching.
+// Mengimplementasikan strategi caching untuk setiap request.
 self.addEventListener('fetch', event => {
     const requestUrl = new URL(event.request.url);
 
     // STRATEGI 1: Network First, then Cache (untuk API OMDb)
-    // - Selalu coba ambil data terbaru dari jaringan.
-    // - Jika gagal (offline), baru ambil dari cache.
-    // - Ini memastikan data selalu up-to-date jika ada koneksi.
     if (requestUrl.hostname === 'www.omdbapi.com') {
         event.respondWith(
             caches.open(API_CACHE_NAME).then(cache => {
                 return fetch(event.request)
                     .then(networkResponse => {
-                        // Jika berhasil, simpan response ke cache API dan kembalikan ke aplikasi.
+                        // Jika berhasil, simpan response ke cache API dan kembalikan.
                         cache.put(event.request, networkResponse.clone());
                         return networkResponse;
                     })
                     .catch(() => {
-                        // Jika fetch gagal (misal, offline), cari di cache API.
+                        // Jika fetch gagal (offline), cari di cache API.
                         console.log('Fetch gagal dari network, mencari di API cache...');
                         return cache.match(event.request);
                     });
             })
         );
-        return;
+        return; // Hentikan eksekusi agar tidak lanjut ke strategi kedua.
     }
 
-    // STRATEGI 2: Cache First, then Network (untuk App Shell & aset statis)
-    // - Cek di cache dulu. Jika ada, langsung kembalikan.
-    // - Jika tidak ada di cache, baru ambil dari jaringan.
-    // - Ini membuat aplikasi memuat sangat cepat (instant loading).
+    // STRATEGI 2: Cache First, then Network (untuk App Shell & aset statis lainnya, termasuk font)
     event.respondWith(
         caches.match(event.request).then(cachedResponse => {
-            return cachedResponse || fetch(event.request).then(networkResponse => {
-                // Opcional: Simpan aset yang baru diakses ke cache statis
-                // Ini berguna jika ada aset yang tidak termasuk di `urlsToCache` awal
-                const responseToCache = networkResponse.clone();
-                caches.open(STATIC_CACHE_NAME).then(cache => {
-                    cache.put(event.request, responseToCache);
+            // Jika ada di cache, langsung kembalikan.
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+            
+            // Jika tidak ada di cache, ambil dari jaringan.
+            return fetch(event.request).then(networkResponse => {
+                // Simpan aset yang baru diakses ini ke cache statis agar bisa dipakai offline nanti.
+                // Ini akan menangani aset seperti Google Fonts secara otomatis.
+                return caches.open(STATIC_CACHE_NAME).then(cache => {
+                    // Hanya cache request yang valid (GET method).
+                    if (event.request.method === 'GET') {
+                        cache.put(event.request, networkResponse.clone());
+                    }
+                    return networkResponse;
                 });
-                return networkResponse;
             });
         })
     );

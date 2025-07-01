@@ -1,8 +1,3 @@
-// ===================================================================================
-// LOGIKA SERVICE WORKER (NonAChill PWA)
-// ===================================================================================
-
-// --- Konfigurasi Cache ---
 const CACHE_VERSION = 'v2.0';
 const STATIC_CACHE_NAME = `movie-static-${CACHE_VERSION}`; // Cache untuk App Shell
 const API_CACHE_NAME = `movie-api-${CACHE_VERSION}`;      // Cache untuk data dari API
